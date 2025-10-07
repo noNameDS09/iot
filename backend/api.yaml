@@ -1,0 +1,563 @@
+openapi: 3.0.0
+info:
+  title: IoT Project Aura
+  description: REST API documentation for IoT Project (Devices, Energy, Analytics, Scheduling, Settings, Users, Reports, Notifications)
+  version: 1.0.0
+
+servers:
+  - url: http://localhost:5000
+    description: Local development server
+
+paths:
+  ############################
+  # Devices API
+  ############################
+  /devices:
+    get:
+      summary: List all devices with status
+      responses:
+        "200":
+          description: A list of devices
+          content:
+            application/json:
+              example:
+                - id: 1
+                  name: "Main Conveyor Motor"
+                  status: "online"
+                  location: "Assembly Line 1"
+                - id: 2
+                  name: "Optical Sensor 3.4"
+                  status: "offline"
+                  location: "Assembly Line 2"
+    post:
+      summary: Add a new device
+      requestBody:
+        required: true
+        content:
+          application/json:
+            example:
+              name: "Sorting Arm Actuator"
+              status: "online"
+              location: "Assembly Line 1"
+      responses:
+        "201":
+          description: Device added successfully
+
+  /devices/{id}:
+    get:
+      summary: Get details of a single device
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Device details
+          content:
+            application/json:
+              example:
+                id: 1
+                name: "Main Conveyor Motor"
+                status: "online"
+                location: "Assembly Line 1"
+                voltage: "220V"
+                current: "15A"
+                lastActive: "2025-09-15T10:00:00Z"
+    put:
+      summary: Update device status/settings
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            example:
+              status: "offline"
+      responses:
+        "200":
+          description: Device updated
+    delete:
+      summary: Remove a device
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Device removed
+
+  /devices/{id}/settings:
+    patch:
+      summary: Update specific device settings
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            example:
+              threshold: 80
+              mode: "eco"
+      responses:
+        "200":
+          description: Device settings updated
+
+  /devices/scan-qr:
+    post:
+      summary: Register device via QR code
+      requestBody:
+        required: true
+        content:
+          application/json:
+            example:
+              qrCode: "QRM-DEVICE-12345"
+      responses:
+        "200":
+          description: Device registered successfully
+          content:
+            application/json:
+              example:
+                id: 5
+                name: "New Robotic Arm"
+                status: "online"
+                location: "Factory Floor 2"
+
+  ############################
+  # Energy API
+  ############################
+  /energy/today:
+    get:
+      summary: Today’s kWh usage
+      responses:
+        "200":
+          description: Energy usage for today
+          content:
+            application/json:
+              example:
+                kWh: 250
+
+  /energy/top-consumers:
+    get:
+      summary: Top energy consuming devices
+      responses:
+        "200":
+          description: List of top consumers
+          content:
+            application/json:
+              example:
+                - device: "Main Conveyor Motor"
+                  kWh: 120
+                - device: "Workshop Lights"
+                  kWh: 80
+                - device: "HVAC Unit 1"
+                  kWh: 50
+
+  /energy/history:
+    get:
+      summary: Past energy usage
+      responses:
+        "200":
+          description: Historical usage
+          content:
+            application/json:
+              example:
+                - date: "2025-09-01"
+                  kWh: 200
+                - date: "2025-09-02"
+                  kWh: 220
+                - date: "2025-09-03"
+                  kWh: 230
+
+  /energy/realtime:
+    get:
+      summary: Current live energy usage
+      responses:
+        "200":
+          description: Real-time usage
+          content:
+            application/json:
+              example:
+                kWh: 15
+                timestamp: "2025-09-15T10:30:00Z"
+
+  /energy/forecast:
+    get:
+      summary: Predicted upcoming energy usage
+      responses:
+        "200":
+          description: Forecast data
+          content:
+            application/json:
+              example:
+                - date: "2025-09-16"
+                  predicted_kWh: 260
+                - date: "2025-09-17"
+                  predicted_kWh: 275
+
+  ############################
+  # Alerts API
+  ############################
+  /alerts:
+    get:
+      summary: Active alerts
+      responses:
+        "200":
+          description: List of active alerts
+          content:
+            application/json:
+              example:
+                - id: 1
+                  message: "Overheating detected in Conveyor Motor"
+                  level: "high"
+                - id: 2
+                  message: "Low power supply in Assembly Line 2"
+                  level: "medium"
+
+  /alerts/history:
+    get:
+      summary: Past alerts
+      responses:
+        "200":
+          description: List of past alerts
+          content:
+            application/json:
+              example:
+                - date: "2025-08-30"
+                  message: "Device offline - HVAC Unit"
+                - date: "2025-08-28"
+                  message: "Voltage fluctuation - Sensor 3.4"
+
+  /alerts/acknowledge:
+    post:
+      summary: Acknowledge an alert
+      requestBody:
+        required: true
+        content:
+          application/json:
+            example:
+              id: 1
+              acknowledgedBy: "operator1"
+      responses:
+        "200":
+          description: Alert acknowledged
+
+  ############################
+  # Events/Schedule API
+  ############################
+  /events/upcoming:
+    get:
+      summary: Upcoming events/tasks
+      responses:
+        "200":
+          description: List of events
+          content:
+            application/json:
+              example:
+                - id: 1
+                  title: "Maintenance check"
+                  date: "2025-09-15"
+                - id: 2
+                  title: "Energy audit"
+                  date: "2025-09-20"
+
+  /events:
+    post:
+      summary: Add new event
+      requestBody:
+        required: true
+        content:
+          application/json:
+            example:
+              title: "Filter replacement"
+              date: "2025-09-18"
+      responses:
+        "201":
+          description: Event created
+
+  /events/{id}:
+    put:
+      summary: Update an event
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            example:
+              title: "Updated maintenance"
+              date: "2025-09-19"
+      responses:
+        "200":
+          description: Event updated
+    delete:
+      summary: Cancel an event
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Event deleted
+
+  ############################
+  # User & Role Management
+  ############################
+  /users/signup:
+    post:
+      summary: User signup
+      requestBody:
+        required: true
+        content:
+          application/json:
+            example:
+              username: "admin"
+              password: "secure123"
+              role: "manager"
+      responses:
+        "201":
+          description: User registered
+
+  /users/login:
+    post:
+      summary: User login
+      requestBody:
+        required: true
+        content:
+          application/json:
+            example:
+              username: "admin"
+              password: "secure123"
+      responses:
+        "200":
+          description: Login successful
+          content:
+            application/json:
+              example:
+                token: "jwt_token_here"
+
+  /users/logout:
+    post:
+      summary: User logout
+      responses:
+        "200":
+          description: Logout successful
+
+  /users/refresh-token:
+    post:
+      summary: Refresh access token
+      responses:
+        "200":
+          description: Token refreshed
+          content:
+            application/json:
+              example:
+                token: "new_jwt_token_here"
+
+  /users/profile:
+    get:
+      summary: Get user profile
+      responses:
+        "200":
+          description: User profile
+          content:
+            application/json:
+              example:
+                id: 1
+                username: "admin"
+                role: "manager"
+
+  /users:
+    get:
+      summary: List all users (Admin only)
+      responses:
+        "200":
+          description: List of users
+          content:
+            application/json:
+              example:
+                - id: 1
+                  username: "admin"
+                  role: "manager"
+                - id: 2
+                  username: "operator1"
+                  role: "operator"
+
+  /users/{id}/role:
+    put:
+      summary: Update user role (Admin only)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            example:
+              role: "operator"
+      responses:
+        "200":
+          description: Role updated
+
+  /users/{id}:
+    delete:
+      summary: Remove a user (Admin only)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: User removed
+
+  ############################
+  # Reports API
+  ############################
+  /reports/daily:
+    get:
+      summary: Daily report
+      responses:
+        "200":
+          description: Daily report data
+          content:
+            application/json:
+              example:
+                date: "2025-09-14"
+                energyUsed: 250
+                activeDevices: 10
+
+  /reports/monthly:
+    get:
+      summary: Monthly report
+      responses:
+        "200":
+          description: Monthly report data
+          content:
+            application/json:
+              example:
+                month: "September 2025"
+                totalEnergy: 7000
+                avgDevicesOnline: 12
+
+  /reports/custom:
+    get:
+      summary: Custom report for a date range
+      parameters:
+        - name: from
+          in: query
+          required: true
+          schema:
+            type: string
+            format: date
+        - name: to
+          in: query
+          required: true
+          schema:
+            type: string
+            format: date
+      responses:
+        "200":
+          description: Custom report
+          content:
+            application/json:
+              example:
+                from: "2025-09-01"
+                to: "2025-09-10"
+                totalEnergy: 2500
+                avgDevicesOnline: 11
+
+  ############################
+  # Notifications API
+  ############################
+  /notifications:
+    get:
+      summary: Unread notifications
+      responses:
+        "200":
+          description: List of unread notifications
+          content:
+            application/json:
+              example:
+                - id: 1
+                  message: "New firmware update available"
+                  read: false
+                - id: 2
+                  message: "Energy limit exceeded"
+                  read: false
+
+  /notifications/read:
+    post:
+      summary: Mark notifications as read
+      requestBody:
+        required: true
+        content:
+          application/json:
+            example:
+              ids: [1, 2]
+      responses:
+        "200":
+          description: Notifications marked as read
+
+  /notifications/{id}:
+    delete:
+      summary: Delete a notification
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Notification deleted
+
+  ############################
+  # Settings API
+  ############################
+  /settings/preferences:
+    get:
+      summary: Get app preferences
+      responses:
+        "200":
+          description: User preferences
+          content:
+            application/json:
+              example:
+                language: "English"
+                theme: "Light"
+                notifications: true
+    put:
+      summary: Update app preferences
+      requestBody:
+        required: true
+        content:
+          application/json:
+            example:
+              language: "French"
+              theme: "Dark"
+              notifications: false
+      responses:
+        "200":
+          description: Preferences updated
