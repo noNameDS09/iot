@@ -1,4 +1,4 @@
-// iot-backend/src/routes/events.js
+// routes/events.js
 const express = require('express');
 const {
   getUpcomingEvents,
@@ -9,16 +9,16 @@ const {
 
 const router = express.Router();
 
-// GET /events/upcoming - Upcoming events/tasks
+// GET /events/upcoming
 router.get('/upcoming', getUpcomingEvents);
 
-// POST /events - Add new event
+// POST /events
 router.post('/', createEvent);
 
-// PUT /events/:id - Update an event
+// PUT /events/:id
 router.put('/:id', updateEvent);
 
-// DELETE /events/:id - Cancel an event
+// DELETE /events/:id
 router.delete('/:id', deleteEvent);
 
 module.exports = router;
