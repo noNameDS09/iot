@@ -1,7 +1,3 @@
-// models/event.js
-
-// --- WatermelonDB Server-Side Simulation ---
-
 let events = [
   { id: 1, title: "Maintenance check", date: "2025-10-20" },
   { id: 2, title: "Energy audit", date: "2025-10-30" },
@@ -10,13 +6,11 @@ let events = [
 
 let nextId = events.length + 1;
 
-// Helper function to simulate asynchronous network/DB delay
+
 const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
 const EventModel = {
-  /**
-   * Reads upcoming events. Must be async.
-   */
+
   getUpcoming: async () => { 
     await delay(100);
     
@@ -40,9 +34,7 @@ const EventModel = {
     return newEvent;
   },
 
-  /**
-   * Updates an existing event record. Must be async.
-   */
+
   update: async (id, title, date) => {
     await delay(100);
     
@@ -54,9 +46,7 @@ const EventModel = {
     return events[index];
   },
 
-  /**
-   * Deletes an event record. Must be async.
-   */
+
   delete: async (id) => {
     await delay(100);
     
