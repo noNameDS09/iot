@@ -12,7 +12,6 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 const screenWidth = Dimensions.get('window').width;
 const horizontalPadding = 16 * 2;
 
-// Interfaces
 interface EnergyDay {
   date: string;
   kWh: number;
@@ -23,29 +22,42 @@ interface DeviceUsage {
   kWh: number;
 }
 
+interface HourlyUsage {
+  day: number;
+  hour: number;
+  kWh: number;
+}
+
 export default function DashboardScreen() {
   const insets = useSafeAreaInsets();
   const [energyHistory, setEnergyHistory] = useState<EnergyDay[]>([]);
   const [topDevices, setTopDevices] = useState<DeviceUsage[]>([]);
+  const [hourlyUsage, setHourlyUsage] = useState<HourlyUsage[]>([]);
   const [loading, setLoading] = useState(true);
 
-  const API_BASE = 'http://localhost:5000'; // Replace with your backend IP if needed
+  const API_BASE = 'http://localhost:5000'; // replace with your backend IP
 
   useEffect(() => {
     async function fetchData() {
       try {
-        const [historyRes, devicesRes] = await Promise.all([
+        const [historyRes, devicesRes, hourlyRes] = await Promise.all([
           fetch(`${API_BASE}/energy/history`),
           fetch(`${API_BASE}/energy/top-consumers`),
+          fetch(`${API_BASE}/energy/hourly-usage`),
         ]);
 
         const history = await historyRes.json();
         const devices = await devicesRes.json();
+        const hourly = await hourlyRes.json();
 
-        setEnergyHistory(history);
-        setTopDevices(devices);
+        setEnergyHistory(Array.isArray(history) ? history : []);
+        setTopDevices(Array.isArray(devices) ? devices : []);
+        setHourlyUsage(Array.isArray(hourly) ? hourly : []);
       } catch (err) {
         console.error('Error fetching energy data:', err);
+        setEnergyHistory([]);
+        setTopDevices([]);
+        setHourlyUsage([]);
       } finally {
         setLoading(false);
       }
@@ -54,12 +66,28 @@ export default function DashboardScreen() {
     fetchData();
   }, []);
 
-  // Chart data formatting
+  if (loading) {
+    return (
+      <View
+        style={{
+          flex: 1,
+          justifyContent: 'center',
+          alignItems: 'center',
+          paddingTop: insets.top,
+        }}
+      >
+        <ActivityIndicator size="large" color="#2563eb" />
+      </View>
+    );
+  }
+
+  // Data for Line Chart
   const lineChartData = {
-    labels: energyHistory.map((e) => e.date.split('-')[2]), // day
+    labels: energyHistory.map((e) => e.date.split('-')[2] || ''),
     datasets: [{ data: energyHistory.map((e) => e.kWh) }],
   };
 
+  // Data for Pie Chart
   const pieColors = ['#facc15', '#22c55e', '#ef4444', '#3b82f6', '#a855f7'];
   const pieChartData = topDevices.map((item, i) => ({
     name: item.device,
@@ -69,156 +97,221 @@ export default function DashboardScreen() {
     legendFontSize: 14,
   }));
 
-  // Simulated Peak Usage Heatmap
+  // Heatmap setup
   const days = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
   const hours = Array.from({ length: 24 }, (_, i) => i);
-  const generateUsageGrid = () =>
-    days.map(() =>
-      hours.map(() => {
-        const isActive = Math.random() > 0.6;
-        const intensity = Math.floor(Math.random() * 3);
-        return isActive ? intensity : null;
-      })
-    );
 
-  const usageGrid = generateUsageGrid();
-
-  if (loading) {
-    return (
-      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
-        <ActivityIndicator size="large" color="#3b82f6" />
-        <Text>Loading Dashboard...</Text>
-      </View>
-    );
-  }
+  const usageGrid = days.map((_, dayIndex) =>
+    hours.map((hour) => {
+      const record = hourlyUsage.find(
+        (r) => r.day === dayIndex && r.hour === hour
+      );
+      if (!record) return null;
+      if (record.kWh > 50) return 2;
+      if (record.kWh > 20) return 1;
+      return null;
+    })
+  );
 
   return (
     <ScrollView
-      style={{ flex: 1, backgroundColor: 'white', paddingTop: insets.top }}
-      contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 40 }}
+      style={{
+        flex: 1,
+        backgroundColor: '#f3f4f6', // light gray background
+        paddingTop: insets.top,
+      }}
+      contentContainerStyle={{
+        paddingBottom: 32,
+        paddingHorizontal: 16,
+      }}
     >
-      <Text style={{ fontSize: 28, fontWeight: 'bold', marginBottom: 16 }}>
+      {/* Main Title */}
+      <Text
+        style={{
+          fontWeight: '700',
+          fontSize: 26,
+          color: '#111827',
+          marginBottom: 16,
+          marginTop: 10,
+        }}
+      >
         Analytics
       </Text>
 
-      {/* Line Chart */}
+      {/* Energy Usage Chart */}
       <View
         style={{
-          backgroundColor: '#f3f4f6',
-          borderRadius: 16,
-          padding: 16,
-          marginBottom: 20,
+          backgroundColor: '#fff',
+          borderRadius: 12,
+          padding: 12,
+          marginBottom: 24,
+          shadowColor: '#000',
+          shadowOpacity: 0.05,
+          shadowRadius: 4,
         }}
       >
-        <Text style={{ fontSize: 18, fontWeight: '600', marginBottom: 8 }}>
+        <Text
+          style={{
+            fontWeight: '600',
+            fontSize: 18,
+            color: '#1e3a8a',
+            marginBottom: 8,
+          }}
+        >
           Energy Usage (Last 7 Days)
         </Text>
+
         <LineChart
           data={lineChartData}
-          width={screenWidth - horizontalPadding - 32}
+          width={screenWidth - horizontalPadding}
           height={220}
           chartConfig={{
-            backgroundColor: '#fff',
-            backgroundGradientFrom: '#fff',
-            backgroundGradientTo: '#fff',
-            color: () => '#3b82f6',
-            labelColor: () => '#000',
-            strokeWidth: 2,
+            backgroundGradientFrom: '#ffffff',
+            backgroundGradientTo: '#ffffff',
             decimalPlaces: 0,
+            color: (opacity = 1) => `rgba(37, 99, 235, ${opacity})`,
+            labelColor: () => '#1e3a8a',
+            propsForDots: { r: '5', strokeWidth: '2', stroke: '#2563eb' },
           }}
           bezier
-          style={{ borderRadius: 12 }}
+          style={{
+            borderRadius: 12,
+          }}
         />
       </View>
 
-      {/* Pie Chart */}
+      {/* Top Device Consumption */}
       <View
         style={{
-          backgroundColor: '#f3f4f6',
-          borderRadius: 16,
-          padding: 16,
-          marginBottom: 20,
+          backgroundColor: '#fff',
+          borderRadius: 12,
+          padding: 12,
+          marginBottom: 24,
+          shadowColor: '#000',
+          shadowOpacity: 0.05,
+          shadowRadius: 4,
         }}
       >
-        <Text style={{ fontSize: 18, fontWeight: '600', marginBottom: 8 }}>
+        <Text
+          style={{
+            fontWeight: '600',
+            fontSize: 18,
+            color: '#1e3a8a',
+            marginBottom: 8,
+          }}
+        >
           Top Device Consumption
         </Text>
+
         <PieChart
           data={pieChartData}
-          width={screenWidth - horizontalPadding - 32}
-          height={220}
-          chartConfig={{ color: () => '#000' }}
+          width={screenWidth - horizontalPadding}
+          height={200}
+          chartConfig={{
+            backgroundGradientFrom: '#ffffff',
+            backgroundGradientTo: '#ffffff',
+            color: () => '#2563eb',
+          }}
           accessor="population"
           backgroundColor="transparent"
-          paddingLeft="15"
+          paddingLeft="10"
           absolute
         />
       </View>
 
-      {/* Peak Usage Hours Heatmap */}
+      {/* Peak Usage Hours (Simulated) */}
       <View
         style={{
-          backgroundColor: '#f3f4f6',
-          borderRadius: 16,
-          padding: 16,
+          backgroundColor: '#fff',
+          borderRadius: 12,
+          padding: 12,
+          marginBottom: 24,
+          shadowColor: '#000',
+          shadowOpacity: 0.05,
+          shadowRadius: 4,
         }}
       >
-        <Text style={{ fontSize: 18, fontWeight: '600', marginBottom: 8 }}>
-          Peak Usage Hours (Simulated)
+        <Text
+          style={{
+            fontWeight: '600',
+            fontSize: 18,
+            color: '#1e3a8a',
+            marginBottom: 10,
+            alignSelf: 'flex-start',
+          }}
+        >
+          Peak Usage Hours 
         </Text>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-          <View>
-            <View
-              style={{ flexDirection: 'row', marginBottom: 8, marginLeft: 20 }}
-            >
-              {hours.map((hour) => (
-                <Text
-                  key={`hour-${hour}`}
-                  style={{
-                    width: 24,
-                    textAlign: 'center',
-                    fontSize: 12,
-                    color: '#6b7280',
-                  }}
-                >
-                  {hour.toString().padStart(2, '0')}
-                </Text>
-              ))}
-            </View>
-            {usageGrid.map((row, rowIndex) => (
-              <View
-                key={`row-${rowIndex}`}
-                style={{
-                  flexDirection: 'row',
-                  alignItems: 'center',
-                  marginBottom: 4,
-                }}
-              >
-                <Text style={{ width: 20, fontSize: 12, marginRight: 4 }}>
-                  {days[rowIndex]}
-                </Text>
-                {row.map((cell, colIndex) => {
-                  let bgColor = '#e5e7eb';
-                  if (cell === 1) bgColor = '#60a5fa';
-                  if (cell === 2) bgColor = '#ef4444';
 
-                  return (
-                    <View
-                      key={`cell-${rowIndex}-${colIndex}`}
-                      style={{
-                        width: 20,
-                        height: 20,
-                        marginRight: 4,
-                        borderRadius: 4,
-                        backgroundColor: bgColor,
-                      }}
-                    />
-                  );
-                })}
-              </View>
-            ))}
+        {/* Hour Labels */}
+        <View
+          style={{
+            flexDirection: 'row',
+            justifyContent: 'flex-start',
+            marginBottom: 6,
+            marginLeft: 28,
+          }}
+        >
+          {hours.map((hour) => (
+            <Text
+              key={hour}
+              style={{
+                fontSize: 10,
+                width: 22,
+                textAlign: 'center',
+                color: '#555',
+              }}
+            >
+              {hour.toString().padStart(2, '0')}
+            </Text>
+          ))}
+        </View>
+
+        {/* Day Rows */}
+        {usageGrid.map((dayRow, dayIndex) => (
+          <View
+            key={dayIndex}
+            style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              marginBottom: 4,
+            }}
+          >
+            {/* Day Label */}
+            <Text
+              style={{
+                width: 20,
+                fontWeight: '600',
+                fontSize: 12,
+                color: '#333',
+                marginRight: 4,
+                textAlign: 'center',
+              }}
+            >
+              {days[dayIndex]}
+            </Text>
+
+            {/* Hour Squares */}
+            {dayRow.map((intensity, hourIndex) => {
+              let bgColor = '#e5e7eb'; // default (light gray)
+              if (intensity === 1) bgColor = '#60a5fa'; // blue = medium usage
+              else if (intensity === 2) bgColor = '#ef4444'; // red = high usage
+
+              return (
+                <View
+                  key={hourIndex}
+                  style={{
+                    width: 22,
+                    height: 22,
+                    marginHorizontal: 2,
+                    backgroundColor: bgColor,
+                    borderRadius: 6,
+                  }}
+                />
+              );
+            })}
           </View>
-        </ScrollView>
+        ))}
       </View>
     </ScrollView>
   );

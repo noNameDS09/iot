@@ -1,32 +1,52 @@
-const sqlite3 = require('sqlite3').verbose();
+// utils/db.js
+const knex = require('knex');
 const path = require('path');
 
-const dbPath = path.resolve(__dirname, '../Database/energy.db'); 
-const db = new sqlite3.Database(dbPath, (err) => {
-  if (err) {
-    console.error('Failed to connect to database:', err.message);
-  } else {
-    console.log('Connected to SQLite database.');
-  }
+const dbPath = path.resolve(__dirname, '../Database/energy.db');
+
+const db = knex({
+  client: 'sqlite3',
+  connection: {
+    filename: dbPath,
+  },
+  useNullAsDefault: true,
 });
 
 // Create tables if they don't exist
-db.serialize(() => {
-  db.run(`
-    CREATE TABLE IF NOT EXISTS energy_history (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      date TEXT NOT NULL,
-      kWh INTEGER NOT NULL
-    )
-  `);
+async function createTables() {
+  const hasEnergyHistory = await db.schema.hasTable('energy_history');
+  if (!hasEnergyHistory) {
+    await db.schema.createTable('energy_history', (table) => {
+      table.increments('id').primary();
+      table.string('date').notNullable();
+      table.integer('kWh').notNullable();
+    });
+  }
 
-  db.run(`
-    CREATE TABLE IF NOT EXISTS top_consumers (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      device TEXT NOT NULL,
-      kWh INTEGER NOT NULL
-    )
-  `);
+  const hasTopConsumers = await db.schema.hasTable('top_consumers');
+  if (!hasTopConsumers) {
+    await db.schema.createTable('top_consumers', (table) => {
+      table.increments('id').primary();
+      table.string('device').notNullable();
+      table.integer('kWh').notNullable();
+    });
+  }
+
+  const hasHourlyUsage = await db.schema.hasTable('energy_usage_hourly');
+  if (!hasHourlyUsage) {
+    await db.schema.createTable('energy_usage_hourly', (table) => {
+      table.increments('id').primary();
+      table.integer('day').notNullable();   // 0=Sun, 1=Mon, ..., 6=Sat
+      table.integer('hour').notNullable();  // 0-23
+      table.integer('kWh').notNullable();
+    });
+  }
+
+  console.log('Connected to SQLite with Knex. Tables ready.');
+}
+
+createTables().catch((err) => {
+  console.error('Error creating tables:', err);
 });
 
 module.exports = db;
