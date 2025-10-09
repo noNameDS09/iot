@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import {
   View,
   Text,
@@ -14,32 +14,27 @@ import { Picker } from "@react-native-picker/picker";
 import DateTimePicker, {
   DateTimePickerEvent,
 } from "@react-native-community/datetimepicker";
+import axios from "axios";
 
-// --- Type Definitions ---
 type Action = "On" | "Off";
 
-type ScheduleItem = {
+interface LocalScheduleItem {
   id: number;
   title: string;
   action: Action;
-  time: string; // "HH:MM"
-  days?: string[]; // Short day codes (e.g., 'M', 'Tu')
-  date?: string; // Date string for one-time events (YYYY-MM-DD)
+  time: string;
+  days?: string[];
+  date?: string;
   enabled: boolean;
-};
+}
 
-type DayLabel = {
-  short: string;
-  full: string;
-};
+type DayLabel = { short: string; full: string };
 
-// --- Main Component ---
+const API_BASE_URL = "http://10.0.2.2:3000/api/v1/events";
 
 export default function ScheduleScreen() {
-  // --- Constants and Styles Helpers ---
   const DARK_BLUE = "#0D2C54";
   const WHITE = "#fff";
-
   const containerWidth = useWindowDimensions().width >= 768 ? "60%" : "100%";
 
   const dayLabels: DayLabel[] = [
@@ -52,47 +47,7 @@ export default function ScheduleScreen() {
     { short: "Sa", full: "Saturday" },
   ];
 
-  // --- Initial Data (Simulated Local Storage) ---
-  const initialData: ScheduleItem[] = [
-    {
-      id: 1,
-      title: "Main Conveyor Motor",
-      action: "On",
-      time: "08:00",
-      days: ["S", "M", "Tu", "W", "Th", "F"],
-      enabled: true,
-    },
-    {
-      id: 2,
-      title: "Workshop Lights",
-      action: "Off",
-      time: "22:00",
-      days: ["S", "M", "Tu", "W", "Th", "F"],
-      enabled: true,
-    },
-    {
-      id: 3,
-      title: "HVAC Unit 1",
-      action: "On",
-      time: "06:00",
-      days: ["S", "M", "Tu", "W", "Th", "Sa"],
-      enabled: false,
-    },
-    {
-      id: 4,
-      title: "Assembly Line 2",
-      action: "On",
-      time: "09:00",
-      days: ["S", "M", "Tu", "W", "Th", "Sa"],
-      enabled: true,
-    },
-  ];
-
-  // --- State Variables ---
-  const [scheduleData, setScheduleData] = useState<ScheduleItem[]>(initialData);
-  const [nextId, setNextId] = useState(initialData.length + 1);
-
-  // New Task Form State
+  const [scheduleData, setScheduleData] = useState<LocalScheduleItem[]>([]);
   const [selectedDevice, setSelectedDevice] = useState<string>("");
   const [selectedAction, setSelectedAction] = useState<Action>("On");
   const [time, setTime] = useState<Date>(new Date());
@@ -100,13 +55,69 @@ export default function ScheduleScreen() {
   const [date, setDate] = useState<Date>(new Date());
   const [showTimePicker, setShowTimePicker] = useState<boolean>(false);
   const [showDatePicker, setShowDatePicker] = useState<boolean>(false);
-
-  // Editing State: Tracks which ID is currently being modified in the form
   const [editingId, setEditingId] = useState<number | null>(null);
 
-  // --- CRUD and Helper Functions ---
+  const fetchAndSetSchedules = useCallback(async () => {
+    try {
+      const response = await axios.get(`${API_BASE_URL}/upcoming`);
 
-  /** Clears and resets the new task form. Used by Cancel and after Save. */
+      const mockedData = response.data.map((item: any) => ({
+        id: item.id,
+        title: item.title,
+        action: "On" as Action,
+        time: "08:00",
+        days: item.date ? undefined : ["M", "Tu", "W", "Th", "F"],
+        date: item.date,
+        enabled: true,
+      }));
+      setScheduleData(mockedData);
+    } catch (e) {
+      console.error("API Fetch failed. Using initial local mock data.");
+      setScheduleData([
+        {
+          id: 1,
+          title: "Main Conveyor Motor",
+          action: "On",
+          time: "08:00",
+          days: ["S", "M", "Tu", "W", "Th", "F"],
+          enabled: true,
+          date: undefined,
+        },
+        {
+          id: 2,
+          title: "Workshop Lights",
+          action: "Off",
+          time: "22:00",
+          days: ["S", "M", "Tu", "W", "Th", "F"],
+          enabled: true,
+          date: undefined,
+        },
+        {
+          id: 3,
+          title: "HVAC Unit 1",
+          action: "On",
+          time: "06:00",
+          days: ["S", "M", "Tu", "W", "Th", "Sa"],
+          enabled: false,
+          date: undefined,
+        },
+        {
+          id: 4,
+          title: "Assembly Line 2",
+          action: "On",
+          time: "09:00",
+          days: ["S", "M", "Tu", "W", "Th", "Sa"],
+          enabled: true,
+          date: undefined,
+        },
+      ] as LocalScheduleItem[]);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchAndSetSchedules();
+  }, [fetchAndSetSchedules]);
+
   const resetForm = () => {
     setEditingId(null);
     setSelectedDevice("");
@@ -116,107 +127,74 @@ export default function ScheduleScreen() {
     setDate(new Date());
   };
 
-  /**
-   * Handles both creating a new schedule and saving changes to an existing one.
-   * Connected to the "Schedule Task" / "Save Changes" button.
-   */
-  const handleScheduleTask = () => {
+  const handleScheduleTask = async () => {
     if (!selectedDevice) {
       Alert.alert("Validation Error", "Please select a device.");
       return;
     }
 
-    const timeString = time.toLocaleTimeString([], {
-      hour: "2-digit",
-      minute: "2-digit",
-    });
-
-    const isRecurring = repeatDays.length > 0;
-
-    // Create title based on selected device value
-    const deviceTitles: { [key: string]: string } = {
-      motor: "Main Conveyor Motor",
-      lights: "Workshop Lights",
-    };
-    const deviceTitle = deviceTitles[selectedDevice] || selectedDevice;
-
-    const newSchedule: ScheduleItem = {
-      id: editingId !== null ? editingId : nextId,
-      title: deviceTitle,
-      action: selectedAction,
-      time: timeString,
-      days: isRecurring ? repeatDays : undefined,
-      date: !isRecurring ? date.toISOString().split("T")[0] : undefined,
-      enabled: true,
+    const payload = {
+      title: selectedDevice,
+      date:
+        repeatDays.length === 0 ? date.toISOString().split("T")[0] : undefined,
     };
 
-    setScheduleData((prev) => {
+    try {
       if (editingId !== null) {
-        // UPDATE existing schedule
-        return prev.map((item) => (item.id === editingId ? newSchedule : item));
+        await axios.put(`${API_BASE_URL}/${editingId}`, payload);
+        Alert.alert("Success", "Changes saved successfully.");
       } else {
-        // CREATE new schedule
-        setNextId((prevId) => prevId + 1);
-        return [...prev, newSchedule];
+        await axios.post(API_BASE_URL, payload);
+        Alert.alert("Success", "Task scheduled successfully.");
       }
-    });
 
-    resetForm();
-    Alert.alert(
-      "Success",
-      `${editingId !== null ? "Changes saved" : "Task scheduled"} successfully.`
-    );
+      fetchAndSetSchedules();
+      resetForm();
+    } catch (error) {
+      Alert.alert(
+        "Error",
+        `Failed to save task. ${
+          error instanceof Error ? error.message : "Server error."
+        }`
+      );
+    }
   };
 
-  /**
-   * Populates the New Task form with data from a selected schedule card.
-   * Connected to the "Edit" icon.
-   */
   const handleEditTask = (id: number) => {
     const item = scheduleData.find((s) => s.id === id);
     if (item) {
       setEditingId(item.id);
-
       const deviceValue = item.title.includes("Motor")
         ? "motor"
         : item.title.includes("Lights")
         ? "lights"
         : item.title;
       setSelectedDevice(deviceValue);
-
       setSelectedAction(item.action);
-
       const [hours, minutes] = item.time.split(":").map(Number);
       const newTime = new Date();
-      newTime.setHours(hours, minutes, 0, 0);
+      newTime.setHours(hours || 0, minutes || 0, 0, 0);
       setTime(newTime);
-
       setRepeatDays(item.days || []);
-
       setDate(item.date ? new Date(item.date) : new Date());
     }
   };
 
-  /**
-   * Deletes a schedule item after confirmation.
-   * Connected to the "Delete" icon.
-   */
   const handleDeleteTask = (id: number, title: string) => {
     Alert.alert(
       "Confirm Deletion",
-      `Are you sure you want to delete the schedule for "${title}"?`,
+      `Are you sure you want to delete "${title}"?`,
       [
-        {
-          text: "Cancel",
-          style: "cancel",
-        },
+        { text: "Cancel", style: "cancel" },
         {
           text: "Delete",
           style: "destructive",
-          onPress: () => {
-            setScheduleData((prev) => prev.filter((item) => item.id !== id));
-            if (editingId === id) {
-              resetForm();
+          onPress: async () => {
+            try {
+              await axios.delete(`${API_BASE_URL}/${id}`);
+              fetchAndSetSchedules();
+            } catch (error) {
+              Alert.alert("Error", "Failed to delete task.");
             }
           },
         },
@@ -225,7 +203,6 @@ export default function ScheduleScreen() {
     );
   };
 
-  /** Toggles the enabled state of a schedule. Connected to the Switch. */
   const toggleEnabled = (id: number) => {
     setScheduleData((prev) =>
       prev.map((item) =>
@@ -234,7 +211,6 @@ export default function ScheduleScreen() {
     );
   };
 
-  /** Toggles a day on an existing schedule item. Used for quick-toggle on cards. */
   const toggleDayInSchedule = (id: number, day: string) => {
     setScheduleData((prev) =>
       prev.map((item) => {
@@ -251,14 +227,11 @@ export default function ScheduleScreen() {
     );
   };
 
-  /** Toggles selected days for the New Task form. */
   const toggleRepeatDay = (day: string) => {
     setRepeatDays((prev) =>
       prev.includes(day) ? prev.filter((d) => d !== day) : [...prev, day]
     );
   };
-
-  // --- DateTimePicker Handlers ---
 
   const handleTimeChange = (
     event: DateTimePickerEvent,
@@ -276,8 +249,6 @@ export default function ScheduleScreen() {
     if (selectedDate) setDate(selectedDate);
   };
 
-  // --- Render Logic ---
-
   return (
     <ScrollView
       contentContainerStyle={[styles.scrollContent, { width: containerWidth }]}
@@ -285,13 +256,11 @@ export default function ScheduleScreen() {
     >
       <Text style={styles.header}>Current Schedules</Text>
 
-      {/* --- NO RUNNING TASKS MESSAGE --- */}
       {scheduleData.length === 0 ? (
         <Text style={styles.noTasksMessage}>
           No running tasks. Start by scheduling a new one below! 📝
         </Text>
       ) : (
-        /* --- SCHEDULES LIST --- */
         scheduleData.map((item) => {
           const isActive = item.id === editingId;
 
@@ -346,7 +315,6 @@ export default function ScheduleScreen() {
                     return (
                       <TouchableOpacity
                         key={day.short}
-                        // --- QUICK TOGGLE RESTORED HERE ---
                         onPress={() => toggleDayInSchedule(item.id, day.short)}
                         style={[
                           styles.day,
@@ -453,7 +421,6 @@ export default function ScheduleScreen() {
           })}
         </View>
 
-        {/* Show Date only if no repeat days are selected */}
         {repeatDays.length === 0 && (
           <>
             <Text style={styles.label}>Date (One-time Schedule)</Text>
@@ -511,7 +478,6 @@ const styles = StyleSheet.create({
     marginBottom: 12,
     textAlign: "center",
   },
-  // --- NEW STYLE ---
   noTasksMessage: {
     textAlign: "center",
     fontSize: 16,
@@ -519,7 +485,6 @@ const styles = StyleSheet.create({
     marginBottom: 20,
     paddingHorizontal: 10,
   },
-  // ---
   card: {
     backgroundColor: "#fff",
     width: "100%",
