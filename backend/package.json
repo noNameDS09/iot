@@ -10,6 +10,9 @@
   "dependencies": {
     "@aws-sdk/client-dynamodb": "^3.577.0",
     "@aws-sdk/lib-dynamodb": "^3.577.0",
+    "@nozbe/watermelondb": "^0.25.5",
+    "@nozbe/with-observables": "^1.6.0",
+    "axios": "^1.12.2",
     "bcryptjs": "^2.4.3",
     "cors": "^2.8.5",
     "dotenv": "^17.2.3",
@@ -19,6 +22,7 @@
     "uuid": "^9.0.1"
   },
   "devDependencies": {
+    "@types/axios": "^0.9.36",
     "serverless": "^3.38.0",
     "serverless-offline": "^13.3.4"
   }
