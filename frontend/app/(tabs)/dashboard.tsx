@@ -29,11 +29,10 @@ export default function DashboardScreen() {
   const [topDevices, setTopDevices] = useState<DeviceUsage[]>([]);
   const [loading, setLoading] = useState(true);
 
-  // Backend IP/host
-  const API_BASE = 'http://localhost:5000'; // Change to your backend IP
+  const API_BASE = 'http://localhost:5000'; // Replace with your backend IP if needed
 
   useEffect(() => {
-    const fetchData = async () => {
+    async function fetchData() {
       try {
         const [historyRes, devicesRes] = await Promise.all([
           fetch(`${API_BASE}/energy/history`),
@@ -50,12 +49,27 @@ export default function DashboardScreen() {
       } finally {
         setLoading(false);
       }
-    };
+    }
 
     fetchData();
   }, []);
 
-  // Simulated Heatmap
+  // Chart data formatting
+  const lineChartData = {
+    labels: energyHistory.map((e) => e.date.split('-')[2]), // day
+    datasets: [{ data: energyHistory.map((e) => e.kWh) }],
+  };
+
+  const pieColors = ['#facc15', '#22c55e', '#ef4444', '#3b82f6', '#a855f7'];
+  const pieChartData = topDevices.map((item, i) => ({
+    name: item.device,
+    population: item.kWh,
+    color: pieColors[i % pieColors.length],
+    legendFontColor: '#000',
+    legendFontSize: 14,
+  }));
+
+  // Simulated Peak Usage Heatmap
   const days = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
   const hours = Array.from({ length: 24 }, (_, i) => i);
   const generateUsageGrid = () =>
@@ -68,22 +82,6 @@ export default function DashboardScreen() {
     );
 
   const usageGrid = generateUsageGrid();
-
-  // Line Chart Data
-  const lineChartData = {
-    labels: energyHistory.map((entry) => entry.date.split('-')[2]), // Show day only
-    datasets: [{ data: energyHistory.map((entry) => entry.kWh) }],
-  };
-
-  // Pie Chart Data
-  const pieColors = ['#facc15', '#22c55e', '#ef4444', '#3b82f6', '#a855f7'];
-  const pieChartData = topDevices.map((item, i) => ({
-    name: item.device,
-    population: item.kWh,
-    color: pieColors[i % pieColors.length],
-    legendFontColor: '#000',
-    legendFontSize: 14,
-  }));
 
   if (loading) {
     return (
@@ -120,11 +118,11 @@ export default function DashboardScreen() {
           width={screenWidth - horizontalPadding - 32}
           height={220}
           chartConfig={{
-            backgroundColor: '#ffffff',
-            backgroundGradientFrom: '#ffffff',
-            backgroundGradientTo: '#ffffff',
+            backgroundColor: '#fff',
+            backgroundGradientFrom: '#fff',
+            backgroundGradientTo: '#fff',
             color: () => '#3b82f6',
-            labelColor: () => '#000000',
+            labelColor: () => '#000',
             strokeWidth: 2,
             decimalPlaces: 0,
           }}
@@ -157,7 +155,7 @@ export default function DashboardScreen() {
         />
       </View>
 
-      {/* Heatmap */}
+      {/* Peak Usage Hours Heatmap */}
       <View
         style={{
           backgroundColor: '#f3f4f6',
@@ -170,7 +168,9 @@ export default function DashboardScreen() {
         </Text>
         <ScrollView horizontal showsHorizontalScrollIndicator={false}>
           <View>
-            <View style={{ flexDirection: 'row', marginBottom: 8, marginLeft: 20 }}>
+            <View
+              style={{ flexDirection: 'row', marginBottom: 8, marginLeft: 20 }}
+            >
               {hours.map((hour) => (
                 <Text
                   key={`hour-${hour}`}
@@ -186,12 +186,22 @@ export default function DashboardScreen() {
               ))}
             </View>
             {usageGrid.map((row, rowIndex) => (
-              <View key={`row-${rowIndex}`} style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 4 }}>
-                <Text style={{ width: 20, fontSize: 12, marginRight: 4 }}>{days[rowIndex]}</Text>
+              <View
+                key={`row-${rowIndex}`}
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  marginBottom: 4,
+                }}
+              >
+                <Text style={{ width: 20, fontSize: 12, marginRight: 4 }}>
+                  {days[rowIndex]}
+                </Text>
                 {row.map((cell, colIndex) => {
                   let bgColor = '#e5e7eb';
                   if (cell === 1) bgColor = '#60a5fa';
                   if (cell === 2) bgColor = '#ef4444';
+
                   return (
                     <View
                       key={`cell-${rowIndex}-${colIndex}`}
