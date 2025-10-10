@@ -384,109 +384,109 @@ paths:
                 username: "admin"
                 role: "manager"
 
-  /users:
-    get:
-      summary: List all users (Admin only)
-      responses:
-        "200":
-          description: List of users
-          content:
-            application/json:
-              example:
-                - id: 1
-                  username: "admin"
-                  role: "manager"
-                - id: 2
-                  username: "operator1"
-                  role: "operator"
+  # /users:
+  #   get:
+  #     summary: List all users (Admin only)
+  #     responses:
+  #       "200":
+  #         description: List of users
+  #         content:
+  #           application/json:
+  #             example:
+  #               - id: 1
+  #                 username: "admin"
+  #                 role: "manager"
+  #               - id: 2
+  #                 username: "operator1"
+  #                 role: "operator"
 
-  /users/{id}/role:
-    put:
-      summary: Update user role (Admin only)
-      parameters:
-        - name: id
-          in: path
-          required: true
-          schema:
-            type: integer
-      requestBody:
-        required: true
-        content:
-          application/json:
-            example:
-              role: "operator"
-      responses:
-        "200":
-          description: Role updated
+  # /users/{id}/role:
+  #   put:
+  #     summary: Update user role (Admin only)
+  #     parameters:
+  #       - name: id
+  #         in: path
+  #         required: true
+  #         schema:
+  #           type: integer
+  #     requestBody:
+  #       required: true
+  #       content:
+  #         application/json:
+  #           example:
+  #             role: "operator"
+  #     responses:
+  #       "200":
+  #         description: Role updated
 
-  /users/{id}:
-    delete:
-      summary: Remove a user (Admin only)
-      parameters:
-        - name: id
-          in: path
-          required: true
-          schema:
-            type: integer
-      responses:
-        "200":
-          description: User removed
+  # /users/{id}:
+  #   delete:
+  #     summary: Remove a user (Admin only)
+  #     parameters:
+  #       - name: id
+  #         in: path
+  #         required: true
+  #         schema:
+  #           type: integer
+  #     responses:
+  #       "200":
+  #         description: User removed
 
   ############################
   # Reports API
   ############################
-  /reports/daily:
-    get:
-      summary: Daily report
-      responses:
-        "200":
-          description: Daily report data
-          content:
-            application/json:
-              example:
-                date: "2025-09-14"
-                energyUsed: 250
-                activeDevices: 10
+  # /reports/daily:
+  #   get:
+  #     summary: Daily report
+  #     responses:
+  #       "200":
+  #         description: Daily report data
+  #         content:
+  #           application/json:
+  #             example:
+  #               date: "2025-09-14"
+  #               energyUsed: 250
+  #               activeDevices: 10
 
-  /reports/monthly:
-    get:
-      summary: Monthly report
-      responses:
-        "200":
-          description: Monthly report data
-          content:
-            application/json:
-              example:
-                month: "September 2025"
-                totalEnergy: 7000
-                avgDevicesOnline: 12
+  # /reports/monthly:
+  #   get:
+  #     summary: Monthly report
+  #     responses:
+  #       "200":
+  #         description: Monthly report data
+  #         content:
+  #           application/json:
+  #             example:
+  #               month: "September 2025"
+  #               totalEnergy: 7000
+  #               avgDevicesOnline: 12
 
-  /reports/custom:
-    get:
-      summary: Custom report for a date range
-      parameters:
-        - name: from
-          in: query
-          required: true
-          schema:
-            type: string
-            format: date
-        - name: to
-          in: query
-          required: true
-          schema:
-            type: string
-            format: date
-      responses:
-        "200":
-          description: Custom report
-          content:
-            application/json:
-              example:
-                from: "2025-09-01"
-                to: "2025-09-10"
-                totalEnergy: 2500
-                avgDevicesOnline: 11
+  # /reports/custom:
+  #   get:
+  #     summary: Custom report for a date range
+  #     parameters:
+  #       - name: from
+  #         in: query
+  #         required: true
+  #         schema:
+  #           type: string
+  #           format: date
+  #       - name: to
+  #         in: query
+  #         required: true
+  #         schema:
+  #           type: string
+  #           format: date
+  #     responses:
+  #       "200":
+  #         description: Custom report
+  #         content:
+  #           application/json:
+  #             example:
+  #               from: "2025-09-01"
+  #               to: "2025-09-10"
+  #               totalEnergy: 2500
+  #               avgDevicesOnline: 11
 
   ############################
   # Notifications API
