@@ -1,59 +1,43 @@
-import * as Notifications from 'expo-notifications';
-// Assuming you have your database instance and models exported
-import { database } from '../database';
-import Alert from '../database/models/Alert';
+// This is a server-side controller.
+// It will contain the logic to interact with your main database (e.g., DynamoDB, MongoDB, PostgreSQL).
+// The functions here are called by your Express routes.
 
 /**
- * Creates an alert in the local WatermelonDB and triggers a 
- * local push notification if the alert is critical.
- * @param {string | null} deviceId - The ID of the device causing the alert.
- * @param {'normal' | 'critical'} level - The severity of the alert.
- * @param {string} message - The alert message.
+ * Fetches all active (unacknowledged) alerts for the authenticated user.
+ * This is a placeholder and should be implemented to query your database.
  */
-export const createAlert = async (deviceId, level, message) => {
+const getActiveAlerts = async (req, res) => {
+    // The authenticated user's info is attached by the authMiddleware
+    const userId = req.user.id;
+    console.log(`Fetching active alerts for user: ${userId}`);
+
     try {
-        // 1. Save the alert to the local WatermelonDB
-        await database.write(async () => {
-            const alertsCollection = database.collections.get('alerts');
-            await alertsCollection.create(alert => {
-                alert.deviceId = deviceId;
-                alert.level = level;
-                alert.message = message;
-                alert.acknowledged = false;
-                alert.createdAt = new Date();
-            });
-        });
-
-        console.log(`Local alert created: ${message}`);
-
-        // 2. If the alert is critical, schedule an immediate local push notification
-        if (level === 'critical') {
-            await Notifications.scheduleNotificationAsync({
-                content: {
-                    title: "Aura Critical Alert",
-                    body: message,
-                    sound: 'default', 
-                },
-                trigger: null, // send immediately
-            });
-            console.log("Critical push notification scheduled.");
-        }
+        // TODO: Implement database logic to find alerts where acknowledged = false
+        const alerts = [
+            { id: 'alert1', message: 'Device "Rack-1" is offline.', level: 'critical', createdAt: new Date() },
+            { id: 'alert2', message: 'High temp warning for "Node-3".', level: 'normal', createdAt: new Date() },
+        ];
+        res.status(200).json(alerts);
     } catch (error) {
-        console.error("Failed to create local alert:", error);
+        console.error("Error fetching active alerts:", error);
+        res.status(500).json({ message: "Internal server error" });
     }
 };
 
 /**
- * Configures the notification handler for the app.
- * This should be called once when your app starts up.
+ * Marks a specific alert as acknowledged.
+ * This is a placeholder and should be implemented to update a record in your database.
  */
-export const setupNotificationHandler = () => {
-    Notifications.setNotificationHandler({
-        handleNotification: async () => ({
-            shouldShowAlert: true,
-            shouldPlaySound: true,
-            shouldSetBadge: false,
-        }),
-    });
+const acknowledgeAlert = async (req, res) => {
+    const { alertId } = req.body;
+    const userId = req.user.id;
+    console.log(`User ${userId} is acknowledging alert: ${alertId}`);
+
+    // TODO: Implement database logic to find the alert by ID and set acknowledged = true
+    res.status(200).json({ message: `Alert ${alertId} acknowledged successfully.` });
 };
 
+module.exports = {
+    getActiveAlerts,
+    acknowledgeAlert,
+};
