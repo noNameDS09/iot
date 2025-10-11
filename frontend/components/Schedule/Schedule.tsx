@@ -14,12 +14,15 @@ import { Picker } from "@react-native-picker/picker";
 import DateTimePicker, {
   DateTimePickerEvent,
 } from "@react-native-community/datetimepicker";
-import axios from "axios";
+
+// --- WMDB PLACEHOLDERS ---
+// import { database } from 'path/to/database';
+// import { Q } from '@nozbe/watermelondb';
 
 type Action = "On" | "Off";
 
 interface LocalScheduleItem {
-  id: number;
+  id: string;
   title: string;
   action: Action;
   time: string;
@@ -29,8 +32,6 @@ interface LocalScheduleItem {
 }
 
 type DayLabel = { short: string; full: string };
-
-const API_BASE_URL = "http://10.0.2.2:3000/api/v1/events";
 
 export default function ScheduleScreen() {
   const DARK_BLUE = "#0D2C54";
@@ -47,7 +48,47 @@ export default function ScheduleScreen() {
     { short: "Sa", full: "Saturday" },
   ];
 
-  const [scheduleData, setScheduleData] = useState<LocalScheduleItem[]>([]);
+  const initialLocalData: LocalScheduleItem[] = [
+    {
+      id: "1",
+      title: "Main Conveyor Motor",
+      action: "On",
+      time: "08:00",
+      days: ["S", "M", "Tu", "W", "Th", "F"],
+      enabled: true,
+      date: undefined,
+    },
+    {
+      id: "2",
+      title: "Workshop Lights",
+      action: "Off",
+      time: "22:00",
+      days: ["S", "M", "Tu", "W", "Th", "F"],
+      enabled: true,
+      date: undefined,
+    },
+    {
+      id: "3",
+      title: "HVAC Unit 1",
+      action: "On",
+      time: "06:00",
+      days: ["S", "M", "Tu", "W", "Th", "Sa"],
+      enabled: false,
+      date: undefined,
+    },
+    {
+      id: "4",
+      title: "Assembly Line 2",
+      action: "On",
+      time: "09:00",
+      days: ["S", "M", "Tu", "W", "Th", "Sa"],
+      enabled: true,
+      date: undefined,
+    },
+  ];
+
+  const [scheduleData, setScheduleData] =
+    useState<LocalScheduleItem[]>(initialLocalData);
   const [selectedDevice, setSelectedDevice] = useState<string>("");
   const [selectedAction, setSelectedAction] = useState<Action>("On");
   const [time, setTime] = useState<Date>(new Date());
@@ -55,68 +96,16 @@ export default function ScheduleScreen() {
   const [date, setDate] = useState<Date>(new Date());
   const [showTimePicker, setShowTimePicker] = useState<boolean>(false);
   const [showDatePicker, setShowDatePicker] = useState<boolean>(false);
-  const [editingId, setEditingId] = useState<number | null>(null);
+  const [editingId, setEditingId] = useState<string | null>(null);
 
-  const fetchAndSetSchedules = useCallback(async () => {
-    try {
-      const response = await axios.get(`${API_BASE_URL}/upcoming`);
-
-      const mockedData = response.data.map((item: any) => ({
-        id: item.id,
-        title: item.title,
-        action: "On" as Action,
-        time: "08:00",
-        days: item.date ? undefined : ["M", "Tu", "W", "Th", "F"],
-        date: item.date,
-        enabled: true,
-      }));
-      setScheduleData(mockedData);
-    } catch (e) {
-      console.error("API Fetch failed. Using initial local mock data.");
-      setScheduleData([
-        {
-          id: 1,
-          title: "Main Conveyor Motor",
-          action: "On",
-          time: "08:00",
-          days: ["S", "M", "Tu", "W", "Th", "F"],
-          enabled: true,
-          date: undefined,
-        },
-        {
-          id: 2,
-          title: "Workshop Lights",
-          action: "Off",
-          time: "22:00",
-          days: ["S", "M", "Tu", "W", "Th", "F"],
-          enabled: true,
-          date: undefined,
-        },
-        {
-          id: 3,
-          title: "HVAC Unit 1",
-          action: "On",
-          time: "06:00",
-          days: ["S", "M", "Tu", "W", "Th", "Sa"],
-          enabled: false,
-          date: undefined,
-        },
-        {
-          id: 4,
-          title: "Assembly Line 2",
-          action: "On",
-          time: "09:00",
-          days: ["S", "M", "Tu", "W", "Th", "Sa"],
-          enabled: true,
-          date: undefined,
-        },
-      ] as LocalScheduleItem[]);
-    }
+  const subscribeToSchedules = useCallback(() => {
+    // FINAL CODE: This is where you would return the WMDB observable subscription.
+    setScheduleData(initialLocalData);
   }, []);
 
   useEffect(() => {
-    fetchAndSetSchedules();
-  }, [fetchAndSetSchedules]);
+    subscribeToSchedules();
+  }, [subscribeToSchedules]);
 
   const resetForm = () => {
     setEditingId(null);
@@ -133,34 +122,61 @@ export default function ScheduleScreen() {
       return;
     }
 
-    const payload = {
-      title: selectedDevice,
-      date:
-        repeatDays.length === 0 ? date.toISOString().split("T")[0] : undefined,
+    const isRecurring = repeatDays.length > 0;
+    const timeString = time.toLocaleTimeString([], {
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+    const deviceTitle = selectedDevice;
+
+    // NOTE: This object structure must match the properties of your Schedule Model
+    const taskData = {
+      title: deviceTitle,
+      action: selectedAction,
+      time: timeString,
+      enabled: true,
+      // The WMDB model expects 'days_json' and 'date' as null if recurring
+      days_json: JSON.stringify(repeatDays),
+      date: !isRecurring ? date.toISOString().split("T")[0] : null,
+      // device_id: 'fetch-device-id-here' // MUST be added in final code
     };
 
     try {
-      if (editingId !== null) {
-        await axios.put(`${API_BASE_URL}/${editingId}`, payload);
-        Alert.alert("Success", "Changes saved successfully.");
-      } else {
-        await axios.post(API_BASE_URL, payload);
-        Alert.alert("Success", "Task scheduled successfully.");
-      }
+      // --- WMDB Write Transaction Placeholder ---
+      /* await database.write(async () => {
+            const collection = database.collections.get('schedules');
+            if (editingId) {
+                const task = await collection.find(editingId);
+                await task.update(() => { Object.assign(task, taskData); });
+            } else {
+                await collection.create(task => { Object.assign(task, taskData); });
+            }
+        }); */
 
-      fetchAndSetSchedules();
+      Alert.alert("Success", "Task saved locally.");
+
+      setScheduleData((prev) => {
+        const newItem = {
+          id: editingId || String(Date.now()),
+          title: taskData.title,
+          action: taskData.action,
+          time: taskData.time,
+          days: repeatDays,
+          date: taskData.date || undefined,
+          enabled: taskData.enabled,
+        } as LocalScheduleItem;
+        return editingId
+          ? prev.map((item) => (item.id === editingId ? newItem : item))
+          : [...prev, newItem];
+      });
+
       resetForm();
     } catch (error) {
-      Alert.alert(
-        "Error",
-        `Failed to save task. ${
-          error instanceof Error ? error.message : "Server error."
-        }`
-      );
+      Alert.alert("Error", `Failed to save task locally.`);
     }
   };
 
-  const handleEditTask = (id: number) => {
+  const handleEditTask = (id: string) => {
     const item = scheduleData.find((s) => s.id === id);
     if (item) {
       setEditingId(item.id);
@@ -180,7 +196,7 @@ export default function ScheduleScreen() {
     }
   };
 
-  const handleDeleteTask = (id: number, title: string) => {
+  const handleDeleteTask = (id: string, title: string) => {
     Alert.alert(
       "Confirm Deletion",
       `Are you sure you want to delete "${title}"?`,
@@ -191,10 +207,16 @@ export default function ScheduleScreen() {
           style: "destructive",
           onPress: async () => {
             try {
-              await axios.delete(`${API_BASE_URL}/${id}`);
-              fetchAndSetSchedules();
+              // --- WMDB Delete Transaction Placeholder ---
+              /* await database.write(async () => {
+                    const task = await database.collections.get('schedules').find(id);
+                    await task.markAsDeleted();
+                }); */
+
+              Alert.alert("Success", "Task deleted locally.");
+              setScheduleData((prev) => prev.filter((item) => item.id !== id));
             } catch (error) {
-              Alert.alert("Error", "Failed to delete task.");
+              Alert.alert("Error", "Failed to delete task locally.");
             }
           },
         },
@@ -203,7 +225,13 @@ export default function ScheduleScreen() {
     );
   };
 
-  const toggleEnabled = (id: number) => {
+  const toggleEnabled = async (id: string) => {
+    // --- WMDB Update Transaction Placeholder ---
+    /* await database.write(async () => {
+        const task = await database.collections.get('schedules').find(id);
+        await task.update(() => { task.enabled = !task.enabled; });
+    }); */
+
     setScheduleData((prev) =>
       prev.map((item) =>
         item.id === id ? { ...item, enabled: !item.enabled } : item
@@ -211,16 +239,23 @@ export default function ScheduleScreen() {
     );
   };
 
-  const toggleDayInSchedule = (id: number, day: string) => {
+  const toggleDayInSchedule = async (id: string, day: string) => {
+    // --- WMDB Update Transaction Placeholder ---
+    /* await database.write(async () => {
+        const task = await database.collections.get('schedules').find(id);
+        // ... logic to update the days_json column
+        await task.update(() => { task.days_json = JSON.stringify(newDays); });
+    }); */
+
     setScheduleData((prev) =>
       prev.map((item) => {
-        if (item.id === id && Array.isArray(item.days)) {
-          return {
-            ...item,
-            days: item.days.includes(day)
+        if (item.id === id) {
+          const newDays = item.days
+            ? item.days.includes(day)
               ? item.days.filter((d) => d !== day)
-              : [...item.days, day],
-          };
+              : [...item.days, day]
+            : [day];
+          return { ...item, days: newDays };
         }
         return item;
       })

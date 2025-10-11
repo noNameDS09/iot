@@ -1,0 +1,6 @@
+{
+  "dependencies": {
+    "@nozbe/watermelondb": "^0.28.0",
+    "@nozbe/with-observables": "^1.6.0"
+  }
+}
