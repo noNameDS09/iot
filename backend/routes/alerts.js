@@ -1,6 +1,6 @@
-import express from 'express';
-import { getActiveAlerts, acknowledgeAlert } from '../controllers_/alertsController.js';
-import { authMiddleware } from '../middlewares/authMiddleware.js';
+const express = require('express');
+const { getActiveAlerts, acknowledgeAlert } = require('../controllers/alertsController');
+const { authMiddleware } = require('../middlewares/authMiddleware');
 
 const router = express.Router();
 
@@ -8,4 +8,4 @@ const router = express.Router();
 router.get('/', authMiddleware, getActiveAlerts);
 router.post('/acknowledge', authMiddleware, acknowledgeAlert);
 
-export default router;
+module.exports = router;
