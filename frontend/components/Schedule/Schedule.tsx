@@ -14,15 +14,113 @@ import { Picker } from "@react-native-picker/picker";
 import DateTimePicker, {
   DateTimePickerEvent,
 } from "@react-native-community/datetimepicker";
+import * as SQLite from 'expo-sqlite'; // Re-implementing SQLite
 
-// --- WMDB PLACEHOLDERS ---
-// import { database } from 'path/to/database';
-// import { Q } from '@nozbe/watermelondb';
+// ...existing code...
+// --- DATABASE UTILITY CLASS ---
+class ScheduleDB {
+    private db: SQLite.SQLiteDatabase;
+    private tableName = 'schedules';
 
+    constructor() {
+        // Correctly open the database file using expo-sqlite API
+        this.db = SQLite.openDatabase('iot_local_config.db'); 
+        this.initDB();
+    }
+
+    private initDB() {
+        this.db.transaction(tx => {
+            // Create the schedules table with necessary columns
+            tx.executeSql(
+                `CREATE TABLE IF NOT EXISTS ${this.tableName} (
+                    id INTEGER PRIMARY KEY NOT NULL,
+                    device_id TEXT,
+                    title TEXT NOT NULL,
+                    action TEXT NOT NULL,
+                    time TEXT NOT NULL,
+                    days_json TEXT,
+                    date TEXT,
+                    enabled INTEGER NOT NULL
+                );`,
+                [],
+                () => console.log("DB table created successfully"),
+                (_, error) => {
+                    console.log("DB table creation error: ", error);
+                    return true;
+                }
+            );
+        });
+    }
+
+    async getSchedules() {
+        return new Promise<any[]>((resolve, reject) => {
+            this.db.transaction(tx => {
+                tx.executeSql(
+                    `SELECT * FROM ${this.tableName};`,
+                    [],
+                    // The result rows need to be mapped via rows._array
+                    (_, { rows }) => resolve(rows._array),
+                    (_, error) => {
+                        reject(error);
+                        return true;
+                    }
+                );
+            });
+        });
+    }
+
+    async saveSchedule(schedule: any, isUpdate: boolean) {
+        const { id, device_id, title, action, time, days_json, date, enabled } = schedule;
+        const enabledInt = enabled ? 1 : 0;
+        
+        if (isUpdate) {
+            return new Promise<void>((resolve, reject) => {
+                this.db.transaction(tx => {
+                    tx.executeSql(
+                        `UPDATE ${this.tableName} SET title=?, action=?, time=?, days_json=?, date=?, enabled=? WHERE id=?;`,
+                        [title, action, time, days_json, date, enabledInt, id],
+                        () => resolve(),
+                        (_, error) => { reject(error); return true; }
+                    );
+                });
+            });
+        } else {
+            return new Promise<void>((resolve, reject) => {
+                this.db.transaction(tx => {
+                    tx.executeSql(
+                        `INSERT INTO ${this.tableName} (device_id, title, action, time, days_json, date, enabled) VALUES (?, ?, ?, ?, ?, ?, ?);`,
+                        [device_id || "mock-device-id", title, action, time, days_json, date, enabledInt],
+                        () => resolve(),
+                        (_, error) => { reject(error); return true; }
+                    );
+                });
+            });
+        }
+    }
+
+    async deleteSchedule(id: number) {
+        return new Promise<void>((resolve, reject) => {
+            this.db.transaction(tx => {
+                tx.executeSql(
+                    `DELETE FROM ${this.tableName} WHERE id = ?;`,
+                    [id],
+                    () => resolve(),
+                    (_, error) => { reject(error); return true; }
+                );
+            });
+        });
+    }
+}
+
+const dbInstance = new ScheduleDB();
+// ...existing code...
+
+
+// --- TYPE DEFINITIONS ---
 type Action = "On" | "Off";
 
 interface LocalScheduleItem {
-  id: string;
+  id: string; 
   title: string;
   action: Action;
   time: string;
@@ -31,64 +129,23 @@ interface LocalScheduleItem {
   enabled: boolean;
 }
 
-type DayLabel = { short: string; full: string };
+type DayLabel = { short: string; full: string; };
 
+
+// --- MAIN COMPONENT ---
 export default function ScheduleScreen() {
   const DARK_BLUE = "#0D2C54";
   const WHITE = "#fff";
   const containerWidth = useWindowDimensions().width >= 768 ? "60%" : "100%";
 
   const dayLabels: DayLabel[] = [
-    { short: "S", full: "Sunday" },
-    { short: "M", full: "Monday" },
-    { short: "Tu", full: "Tuesday" },
-    { short: "W", full: "Wednesday" },
-    { short: "Th", full: "Thursday" },
-    { short: "F", full: "Friday" },
+    { short: "S", full: "Sunday" }, { short: "M", full: "Monday" },
+    { short: "Tu", full: "Tuesday" }, { short: "W", full: "Wednesday" },
+    { short: "Th", full: "Thursday" }, { short: "F", full: "Friday" },
     { short: "Sa", full: "Saturday" },
   ];
 
-  const initialLocalData: LocalScheduleItem[] = [
-    {
-      id: "1",
-      title: "Main Conveyor Motor",
-      action: "On",
-      time: "08:00",
-      days: ["S", "M", "Tu", "W", "Th", "F"],
-      enabled: true,
-      date: undefined,
-    },
-    {
-      id: "2",
-      title: "Workshop Lights",
-      action: "Off",
-      time: "22:00",
-      days: ["S", "M", "Tu", "W", "Th", "F"],
-      enabled: true,
-      date: undefined,
-    },
-    {
-      id: "3",
-      title: "HVAC Unit 1",
-      action: "On",
-      time: "06:00",
-      days: ["S", "M", "Tu", "W", "Th", "Sa"],
-      enabled: false,
-      date: undefined,
-    },
-    {
-      id: "4",
-      title: "Assembly Line 2",
-      action: "On",
-      time: "09:00",
-      days: ["S", "M", "Tu", "W", "Th", "Sa"],
-      enabled: true,
-      date: undefined,
-    },
-  ];
-
-  const [scheduleData, setScheduleData] =
-    useState<LocalScheduleItem[]>(initialLocalData);
+  const [scheduleData, setScheduleData] = useState<LocalScheduleItem[]>([]); 
   const [selectedDevice, setSelectedDevice] = useState<string>("");
   const [selectedAction, setSelectedAction] = useState<Action>("On");
   const [time, setTime] = useState<Date>(new Date());
@@ -98,108 +155,90 @@ export default function ScheduleScreen() {
   const [showDatePicker, setShowDatePicker] = useState<boolean>(false);
   const [editingId, setEditingId] = useState<string | null>(null);
 
-  const subscribeToSchedules = useCallback(() => {
-    // FINAL CODE: This is where you would return the WMDB observable subscription.
-    setScheduleData(initialLocalData);
+  // --- DATA FETCHING ---
+  const loadSchedules = useCallback(async () => {
+    try {
+        const rawSchedules = await dbInstance.getSchedules();
+        // Map raw DB data to the frontend structure
+        const formattedSchedules = rawSchedules.map((item: any) => ({
+            id: String(item.id),
+            title: item.title,
+            action: item.action as Action,
+            time: item.time,
+            days: item.days_json ? JSON.parse(item.days_json) : undefined,
+            date: item.date || undefined,
+            enabled: item.enabled === 1,
+        }));
+        setScheduleData(formattedSchedules);
+    } catch (e) {
+        console.error("Failed to load schedules from SQLite. Initializing DB.", e);
+        setScheduleData([]);
+    }
   }, []);
 
   useEffect(() => {
-    subscribeToSchedules();
-  }, [subscribeToSchedules]);
+    // Add a small delay to ensure the native module is fully loaded (common fix for 'is not a function')
+    const timer = setTimeout(() => {
+        loadSchedules();
+    }, 100); 
+    return () => clearTimeout(timer);
+  }, [loadSchedules]);
+
+  // --- CRUD OPERATIONS ---
 
   const resetForm = () => {
-    setEditingId(null);
-    setSelectedDevice("");
-    setSelectedAction("On");
-    setTime(new Date());
-    setRepeatDays([]);
-    setDate(new Date());
+    setEditingId(null); setSelectedDevice(""); setSelectedAction("On");
+    setTime(new Date()); setRepeatDays([]); setDate(new Date());
   };
 
   const handleScheduleTask = async () => {
-    if (!selectedDevice) {
-      Alert.alert("Validation Error", "Please select a device.");
-      return;
-    }
+    if (!selectedDevice) { Alert.alert("Validation Error", "Please select a device."); return; }
 
-    const isRecurring = repeatDays.length > 0;
-    const timeString = time.toLocaleTimeString([], {
-      hour: "2-digit",
-      minute: "2-digit",
-    });
-    const deviceTitle = selectedDevice;
-
-    // NOTE: This object structure must match the properties of your Schedule Model
-    const taskData = {
-      title: deviceTitle,
-      action: selectedAction,
-      time: timeString,
-      enabled: true,
-      // The WMDB model expects 'days_json' and 'date' as null if recurring
-      days_json: JSON.stringify(repeatDays),
-      date: !isRecurring ? date.toISOString().split("T")[0] : null,
-      // device_id: 'fetch-device-id-here' // MUST be added in final code
+    const isUpdate = editingId !== null;
+    const timeString = time.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+    const deviceTitle = selectedDevice; 
+    
+    const schedulePayload = {
+        id: isUpdate ? Number(editingId) : undefined,
+        device_id: 'mock-device-id',
+        title: deviceTitle,
+        action: selectedAction,
+        time: timeString,
+        days_json: repeatDays.length > 0 ? JSON.stringify(repeatDays) : null,
+        date: repeatDays.length === 0 ? date.toISOString().split("T")[0] : null,
+        enabled: true,
     };
 
     try {
-      // --- WMDB Write Transaction Placeholder ---
-      /* await database.write(async () => {
-            const collection = database.collections.get('schedules');
-            if (editingId) {
-                const task = await collection.find(editingId);
-                await task.update(() => { Object.assign(task, taskData); });
-            } else {
-                await collection.create(task => { Object.assign(task, taskData); });
-            }
-        }); */
-
-      Alert.alert("Success", "Task saved locally.");
-
-      setScheduleData((prev) => {
-        const newItem = {
-          id: editingId || String(Date.now()),
-          title: taskData.title,
-          action: taskData.action,
-          time: taskData.time,
-          days: repeatDays,
-          date: taskData.date || undefined,
-          enabled: taskData.enabled,
-        } as LocalScheduleItem;
-        return editingId
-          ? prev.map((item) => (item.id === editingId ? newItem : item))
-          : [...prev, newItem];
-      });
-
-      resetForm();
+        await dbInstance.saveSchedule(schedulePayload, isUpdate);
+        Alert.alert("Success", isUpdate ? "Changes saved." : "Task scheduled.");
+        
+        loadSchedules(); 
+        resetForm();
     } catch (error) {
-      Alert.alert("Error", `Failed to save task locally.`);
+        Alert.alert("Error", "Failed to save task to local database.");
     }
   };
 
   const handleEditTask = (id: string) => {
     const item = scheduleData.find((s) => s.id === id);
     if (item) {
-      setEditingId(item.id);
-      const deviceValue = item.title.includes("Motor")
-        ? "motor"
-        : item.title.includes("Lights")
-        ? "lights"
-        : item.title;
-      setSelectedDevice(deviceValue);
-      setSelectedAction(item.action);
-      const [hours, minutes] = item.time.split(":").map(Number);
-      const newTime = new Date();
-      newTime.setHours(hours || 0, minutes || 0, 0, 0);
-      setTime(newTime);
-      setRepeatDays(item.days || []);
-      setDate(item.date ? new Date(item.date) : new Date());
+        setEditingId(item.id);
+        const deviceValue = item.title.includes('Motor') ? 'motor' : item.title.includes('Lights') ? 'lights' : item.title;
+        setSelectedDevice(deviceValue);
+        setSelectedAction(item.action);
+        const [hours, minutes] = item.time.split(':').map(Number);
+        const newTime = new Date();
+        newTime.setHours(hours || 0, minutes || 0, 0, 0);
+        setTime(newTime);
+        setRepeatDays(item.days || []);
+        setDate(item.date ? new Date(item.date) : new Date());
     }
   };
 
   const handleDeleteTask = (id: string, title: string) => {
     Alert.alert(
-      "Confirm Deletion",
-      `Are you sure you want to delete "${title}"?`,
+      "Confirm Deletion", `Are you sure you want to delete "${title}"?`,
       [
         { text: "Cancel", style: "cancel" },
         {
@@ -207,16 +246,11 @@ export default function ScheduleScreen() {
           style: "destructive",
           onPress: async () => {
             try {
-              // --- WMDB Delete Transaction Placeholder ---
-              /* await database.write(async () => {
-                    const task = await database.collections.get('schedules').find(id);
-                    await task.markAsDeleted();
-                }); */
-
-              Alert.alert("Success", "Task deleted locally.");
-              setScheduleData((prev) => prev.filter((item) => item.id !== id));
+                await dbInstance.deleteSchedule(Number(id));
+                Alert.alert("Success", "Task deleted locally.");
+                loadSchedules(); 
             } catch (error) {
-              Alert.alert("Error", "Failed to delete task locally.");
+                Alert.alert("Error", "Failed to delete task locally.");
             }
           },
         },
@@ -226,40 +260,48 @@ export default function ScheduleScreen() {
   };
 
   const toggleEnabled = async (id: string) => {
-    // --- WMDB Update Transaction Placeholder ---
-    /* await database.write(async () => {
-        const task = await database.collections.get('schedules').find(id);
-        await task.update(() => { task.enabled = !task.enabled; });
-    }); */
+      const currentItem = scheduleData.find(i => i.id === id);
+      if (!currentItem) return;
 
-    setScheduleData((prev) =>
-      prev.map((item) =>
-        item.id === id ? { ...item, enabled: !item.enabled } : item
-      )
-    );
+      const payload = {
+          ...currentItem,
+          id: Number(id),
+          enabled: !currentItem.enabled,
+          days_json: currentItem.days ? JSON.stringify(currentItem.days) : null,
+          device_id: 'mock-device-id',
+      };
+      
+      try {
+          await dbInstance.saveSchedule(payload, true);
+          loadSchedules();
+      } catch (error) {
+          Alert.alert("Error", "Failed to toggle status.");
+      }
   };
 
   const toggleDayInSchedule = async (id: string, day: string) => {
-    // --- WMDB Update Transaction Placeholder ---
-    /* await database.write(async () => {
-        const task = await database.collections.get('schedules').find(id);
-        // ... logic to update the days_json column
-        await task.update(() => { task.days_json = JSON.stringify(newDays); });
-    }); */
+      const currentItem = scheduleData.find(i => i.id === id);
+      if (!currentItem) return;
 
-    setScheduleData((prev) =>
-      prev.map((item) => {
-        if (item.id === id) {
-          const newDays = item.days
-            ? item.days.includes(day)
-              ? item.days.filter((d) => d !== day)
-              : [...item.days, day]
-            : [day];
-          return { ...item, days: newDays };
-        }
-        return item;
-      })
-    );
+      const existingDays = currentItem.days || [];
+      const newDays = existingDays.includes(day)
+          ? existingDays.filter((d) => d !== day)
+          : [...existingDays, day];
+
+      const payload = {
+          ...currentItem,
+          id: Number(id),
+          days: newDays, 
+          days_json: JSON.stringify(newDays), 
+          device_id: 'mock-device-id',
+      };
+      
+      try {
+          await dbInstance.saveSchedule(payload, true);
+          loadSchedules();
+      } catch (error) {
+          Alert.alert("Error", "Failed to toggle day.");
+      }
   };
 
   const toggleRepeatDay = (day: string) => {
@@ -268,18 +310,12 @@ export default function ScheduleScreen() {
     );
   };
 
-  const handleTimeChange = (
-    event: DateTimePickerEvent,
-    selectedDate?: Date
-  ) => {
+  const handleTimeChange = (event: DateTimePickerEvent, selectedDate?: Date) => {
     setShowTimePicker(false);
     if (selectedDate) setTime(selectedDate);
   };
 
-  const handleDateChange = (
-    event: DateTimePickerEvent,
-    selectedDate?: Date
-  ) => {
+  const handleDateChange = (event: DateTimePickerEvent, selectedDate?: Date) => {
     setShowDatePicker(false);
     if (selectedDate) setDate(selectedDate);
   };
@@ -292,9 +328,7 @@ export default function ScheduleScreen() {
       <Text style={styles.header}>Current Schedules</Text>
 
       {scheduleData.length === 0 ? (
-        <Text style={styles.noTasksMessage}>
-          No running tasks. Start by scheduling a new one below! 📝
-        </Text>
+        <Text style={styles.noTasksMessage}>No running tasks. Start by scheduling a new one below! 📝</Text>
       ) : (
         scheduleData.map((item) => {
           const isActive = item.id === editingId;
@@ -346,7 +380,7 @@ export default function ScheduleScreen() {
                   {dayLabels.map((day) => {
                     const dayIsActive =
                       Array.isArray(item.days) && item.days.includes(day.short);
-
+                    
                     return (
                       <TouchableOpacity
                         key={day.short}
@@ -356,12 +390,7 @@ export default function ScheduleScreen() {
                           dayIsActive ? styles.activeDay : styles.inactiveDay,
                         ]}
                       >
-                        <Text
-                          style={[
-                            styles.dayText,
-                            { color: dayIsActive ? WHITE : DARK_BLUE },
-                          ]}
-                        >
+                        <Text style={[styles.dayText, { color: dayIsActive ? WHITE : DARK_BLUE }]}>
                           {day.short}
                         </Text>
                       </TouchableOpacity>
@@ -374,17 +403,13 @@ export default function ScheduleScreen() {
         })
       )}
 
-      <Text style={styles.header}>
-        {editingId !== null ? "Edit Task" : "New Task"}
-      </Text>
+      <Text style={styles.header}>{editingId !== null ? 'Edit Task' : 'New Task'}</Text>
       <View style={styles.newTask}>
         <Text style={styles.label}>Device</Text>
         <View style={styles.pickerWrapper}>
           <Picker
             selectedValue={selectedDevice}
-            onValueChange={(itemValue) =>
-              setSelectedDevice(itemValue as string)
-            }
+            onValueChange={(itemValue) => setSelectedDevice(itemValue as string)}
             style={styles.picker}
             dropdownIconColor={DARK_BLUE}
           >
@@ -400,9 +425,7 @@ export default function ScheduleScreen() {
         <View style={styles.pickerWrapper}>
           <Picker
             selectedValue={selectedAction}
-            onValueChange={(itemValue) =>
-              setSelectedAction(itemValue as Action)
-            }
+            onValueChange={(itemValue) => setSelectedAction(itemValue as Action)}
             style={styles.picker}
             dropdownIconColor={DARK_BLUE}
           >
@@ -457,36 +480,28 @@ export default function ScheduleScreen() {
         </View>
 
         {repeatDays.length === 0 && (
-          <>
-            <Text style={styles.label}>Date (One-time Schedule)</Text>
-            <TouchableOpacity
-              onPress={() => setShowDatePicker(true)}
-              style={styles.input}
-            >
-              <Text>{date.toDateString()}</Text>
-            </TouchableOpacity>
-            {showDatePicker && (
-              <DateTimePicker
-                value={date}
-                mode="date"
-                display="default"
-                onChange={handleDateChange}
-              />
-            )}
-          </>
+            <>
+                <Text style={styles.label}>Date (One-time Schedule)</Text>
+                <TouchableOpacity onPress={() => setShowDatePicker(true)} style={styles.input}>
+                  <Text>{date.toDateString()}</Text>
+                </TouchableOpacity>
+                {showDatePicker && (
+                  <DateTimePicker
+                    value={date}
+                    mode="date"
+                    display="default"
+                    onChange={handleDateChange}
+                  />
+                )}
+            </>
         )}
 
         <View style={styles.buttonRow}>
           <TouchableOpacity onPress={resetForm} style={styles.cancelButton}>
             <Text style={styles.cancelText}>Cancel</Text>
           </TouchableOpacity>
-          <TouchableOpacity
-            onPress={handleScheduleTask}
-            style={styles.scheduleButton}
-          >
-            <Text style={styles.scheduleText}>
-              {editingId !== null ? "Save Changes" : "Schedule Task"}
-            </Text>
+          <TouchableOpacity onPress={handleScheduleTask} style={styles.scheduleButton}>
+            <Text style={styles.scheduleText}>{editingId !== null ? 'Save Changes' : 'Schedule Task'}</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -514,9 +529,9 @@ const styles = StyleSheet.create({
     textAlign: "center",
   },
   noTasksMessage: {
-    textAlign: "center",
+    textAlign: 'center',
     fontSize: 16,
-    color: "#6c757d",
+    color: '#6c757d',
     marginBottom: 20,
     paddingHorizontal: 10,
   },
@@ -533,10 +548,10 @@ const styles = StyleSheet.create({
     elevation: 2,
     alignSelf: "center",
     borderWidth: 1,
-    borderColor: "transparent",
+    borderColor: 'transparent',
   },
   editingCard: {
-    borderColor: "#0D2C54",
+    borderColor: '#0D2C54',
     borderWidth: 2,
   },
   disabledCard: {
@@ -620,7 +635,7 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     padding: 12,
     marginBottom: 4,
-    justifyContent: "center",
+    justifyContent: 'center',
     height: 50,
   },
   buttonRow: {
@@ -634,11 +649,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     borderRadius: 6,
     borderWidth: 1,
-    borderColor: "#0D2C54",
+    borderColor: '#0D2C54',
   },
   cancelText: {
     color: "#0D2C54",
-    fontWeight: "bold",
+    fontWeight: 'bold',
   },
   scheduleButton: {
     backgroundColor: "#0D2C54",
